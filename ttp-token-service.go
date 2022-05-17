@@ -28,6 +28,9 @@ import (
 const g_jwtExpiryHours = 12
 const g_audience = "certification-pos-v1"
 const g_kid = "000-0000-00000"
+const g_privateKeyFilename = "private-key.pem"
+
+var g_privatekey *ecdsa.PrivateKey
 
 // const mid = 100
 // const mbn = "Acme Sock"
@@ -44,7 +47,7 @@ type JWTRequestData struct {
 func loadSigningKey() (*ecdsa.PrivateKey, error) {
 
 	// Open pem file containing private signing key
-	privateKeyFile, err := os.Open("private-key.pem")
+	privateKeyFile, err := os.Open(g_privateKeyFilename)
 
 	if err != nil {
 		return nil, err
@@ -83,9 +86,6 @@ func getSigningKey() (*ecdsa.PrivateKey, error) {
 // Generates a TTP Session token with the specified
 func generateJWT(reqData JWTRequestData) (string, error) {
 
-	privatekey, err := loadSigningKey()
-	// fmt.Println(privatekey, err)
-
 	// Setup our claims
 	now := time.Now()
 
@@ -107,7 +107,7 @@ func generateJWT(reqData JWTRequestData) (string, error) {
 	token.Header["kid"] = g_kid
 
 	// Sign and get the complete encoded token as a string using the secret
-	tokenString, err := token.SignedString(privatekey)
+	tokenString, err := token.SignedString(g_privatekey)
 
 	return tokenString, err
 }
@@ -127,6 +127,7 @@ func createToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//TODO JTE not sure why I have to manually check these, when I marked them required in the struct
 	if reqData.Mbn == "" || reqData.Mcc == "" || reqData.Mid == "" || reqData.Tpid == "" {
 		http.Error(w, "{'error':'You must provide mbn, mcc, mid, and tpid'}", http.StatusBadRequest)
 		return
@@ -136,7 +137,7 @@ func createToken(w http.ResponseWriter, r *http.Request) {
 
 	if err == nil {
 		w.Write([]byte("{'token':'" + tokenString + "'}"))
-		//w.WriteHeader(http.StatusOK)
+		// Implicitly returns status 200
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 	}
@@ -144,23 +145,29 @@ func createToken(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
-	// tokenString, err := generateJWT()
-	// fmt.Println(tokenString, err)
+	// Load signing key from file
+	var err error
+	g_privatekey, err = loadSigningKey()
 
-	//Init Router
+	if err != nil {
+		fmt.Println("Unable to load private key from file")
+		panic(err)
+	} else {
+		fmt.Println("Successfully loaded private key")
+	}
+
+	// Init Router
 	r := mux.NewRouter()
 
 	// Set routes
 	r.HandleFunc("/tokens", createToken).Methods("POST")
 
+	// Start listening and handling token requests
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "5000"
 		fmt.Printf("defaulting to port %s\n", port)
 	}
-
 	fmt.Println("Listening on port", port)
-
-	// set our listen port address
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }
