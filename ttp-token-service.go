@@ -143,6 +143,12 @@ func createToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GET / handler (healthcheck)
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	// set header.
+	w.Header().Set("Content-Type", "application/json")
+}
+
 func main() {
 
 	// Load signing key from file
@@ -159,8 +165,11 @@ func main() {
 	// Init Router
 	r := mux.NewRouter()
 
-	// Set routes
+	// Set app routes
 	r.HandleFunc("/tokens", createToken).Methods("POST")
+
+	// Health check endpoint
+	r.HandleFunc("/", healthCheck).Methods("GET")
 
 	// Start listening and handling token requests
 	port := os.Getenv("PORT")
